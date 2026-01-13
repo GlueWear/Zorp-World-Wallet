@@ -1,31 +1,34 @@
-// Vercel Serverless Function - API Proxy for NockBlocks
-// This keeps your API key secure on the server
-
-const NOCKBLOCKS_API_URL = 'https://nockblocks.com/rpc/v1';
-const API_KEY = 'SlfkgK63EJtLJHn2aXYztjzPkCUAGOuOZ7FivhlWtDc';
-const WALLET_ADDRESS = '7557YaCZKQBdNSqDhpXFexJ3VpJLVvbK3zxcnqkFykXcxk7VomyiUh6';
+const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
-  // Enable CORS for your frontend
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Enable CORS for GitHub Pages
+  const allowedOrigins = [
+    'https://gluewear.github.io',
+    'http://localhost:3000',
+    'http://127.0.0.1:5500',
+    'null' // for local file testing
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || origin?.startsWith('https://gluewear.github.io')) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // Handle preflight request
+  
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
-  // Only allow GET requests
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
+  const WALLET_ADDRESS = '7557YaCZKQBdNSqDhpXFexJ3VpJLVvbK3zxcnqkFykXcxk7VomyiUh6';
+  const API_KEY = 'SlfkgK63EJtLJHn2aXYztjzPkCUAGOuOZ7FivhlWtDc';
+  const NOCKBLOCKS_URL = 'https://nockblocks.com/rpc/v1';
 
   try {
-    // Call NockBlocks API using JSON-RPC
-    const response = await fetch(NOCKBLOCKS_API_URL, {
+    const response = await fetch(NOCKBLOCKS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -34,35 +37,23 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'getNotesByAddress',
-        params: [{
+        params: {
           address: WALLET_ADDRESS,
-          showSpent: false  // Only show unspent notes
-        }],
+          showSpent: false
+        },
         id: 1
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`NockBlocks API returned ${response.status}`);
-    }
-
     const data = await response.json();
 
-    // Check for JSON-RPC error
     if (data.error) {
-      res.status(400).json({ 
-        error: 'API Error', 
-        message: data.error.message,
-        details: data.error.data 
-      });
-      return;
+      throw new Error(data.error.message || 'RPC Error');
     }
 
-    // Calculate total balance from notes
     const notes = data.result || [];
-    const totalBalance = notes.reduce((sum, note) => sum + (note.assets || 0), 0);
+    const totalBalance = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
 
-    // Return formatted data
     res.status(200).json({
       success: true,
       address: WALLET_ADDRESS,
@@ -73,10 +64,10 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching wallet data:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch wallet data',
-      message: error.message 
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 };
