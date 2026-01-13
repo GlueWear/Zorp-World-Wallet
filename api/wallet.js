@@ -13,7 +13,6 @@ module.exports = async (req, res) => {
   const NOCKBLOCKS_URL = 'https://nockblocks.com/rpc/v1';
 
   try {
-    // Use native fetch (available in Node 18+)
     const response = await fetch(NOCKBLOCKS_URL, {
       method: 'POST',
       headers: {
@@ -23,22 +22,32 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'getNotesByAddress',
-        params: {
-          address: WALLET_ADDRESS,
-          showSpent: false
-        },
+        params: [
+          {
+            address: WALLET_ADDRESS,
+            showSpent: false
+          }
+        ],
         id: 1
       })
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    console.log('Raw response:', text);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+    }
 
     if (data.error) {
-      throw new Error(data.error.message || 'RPC Error');
+      throw new Error(data.error.message || JSON.stringify(data.error));
     }
 
     const notes = data.result || [];
-    const totalBalance = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
+    const totalBalance = notes.reduce((sum, note) => sum + (note.assets || note.amount || 0), 0);
 
     res.status(200).json({
       success: true,
